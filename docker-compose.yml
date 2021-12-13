@@ -1,0 +1,68 @@
+version: "3.9"
+
+networks:
+  default: {}
+
+services:
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    networks:
+      - default
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  db:
+    build: postgres
+    container_name: db
+    networks:
+      - default
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=test_db
+  web:
+    build: .
+    container_name: app
+    networks:
+      - default
+    command: bash -c "uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    volumes:
+      - .:/code
+    env_file:
+      - .env.local
+    ports:
+      - "8000:8000"
+    depends_on:
+      - rabbitmq
+      - db
+
+  pending-worker:
+    build: .
+    container_name: pending_worker
+    networks:
+      - default
+    env_file:
+      - .env.local
+    depends_on:
+      - rabbitmq
+      - db
+    restart: on-failure
+    command: ["python", "./pending_orders.py"]
+
+  confirmed-worker:
+    build: .
+    container_name: confirmed_worker
+    networks:
+      - default
+    env_file:
+      - .env.local
+    depends_on:
+      - rabbitmq
+      - db
+    restart: on-failure
+    command: ["python", "./confirmed_orders.py"]
